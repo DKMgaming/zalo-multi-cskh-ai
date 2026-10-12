@@ -1923,38 +1923,57 @@ export const AiAgentPage: React.FC<AiAgentPageProps> = ({ accounts }) => {
                     </div>
 
                     {/* Quick select buttons */}
-                    <div className="flex items-center space-x-1.5 self-end sm:self-auto">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const filtered = accountGroups.filter((g) => {
-                            const q = groupSearchQuery.toLowerCase();
-                            const gName = String(g.name || g.groupName || "").toLowerCase();
-                            const gId = String(g.id || g.groupId || "").toLowerCase();
-                            return gName.includes(q) || gId.includes(q);
+                    {(() => {
+                      // Kết hợp danh sách từ Zalo với bất kỳ ID nào đã lưu trước đó
+                      const combinedGroups = [...accountGroups];
+                      const existingSet = new Set(accountGroups.map((g) => String(g.id || g.groupId)));
+                      for (const savedId of modalConfig.allowedGroupIds) {
+                        if (!existingSet.has(savedId)) {
+                          combinedGroups.push({
+                            id: savedId,
+                            groupId: savedId,
+                            name: `Nhóm ${savedId}`,
+                            groupName: `Nhóm ${savedId}`,
+                            avatar: "",
+                            totalMember: 0,
+                            isCustomSaved: true,
                           });
-                          handleSelectAllFilteredGroups(true, filtered);
-                        }}
-                        className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-white border border-slate-200 text-indigo-700 hover:bg-indigo-50"
-                      >
-                        Chọn tất cả
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const filtered = accountGroups.filter((g) => {
-                            const q = groupSearchQuery.toLowerCase();
-                            const gName = String(g.name || g.groupName || "").toLowerCase();
-                            const gId = String(g.id || g.groupId || "").toLowerCase();
-                            return gName.includes(q) || gId.includes(q);
-                          });
-                          handleSelectAllFilteredGroups(false, filtered);
-                        }}
-                        className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                      >
-                        Bỏ chọn
-                      </button>
-                    </div>
+                        }
+                      }
+
+                      const getFiltered = () => {
+                        const q = groupSearchQuery.trim().toLowerCase();
+                        if (!q) return combinedGroups;
+                        return combinedGroups.filter((g) => {
+                          const gName = String(g.name || g.groupName || "").toLowerCase();
+                          const gId = String(g.id || g.groupId || "").toLowerCase();
+                          return gName.includes(q) || gId.includes(q);
+                        });
+                      };
+
+                      const filtered = getFiltered();
+
+                      return (
+                        <>
+                          <div className="flex items-center space-x-1.5 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllFilteredGroups(true, filtered)}
+                              className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-white border border-slate-200 text-indigo-700 hover:bg-indigo-50"
+                            >
+                              Chọn tất cả
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllFilteredGroups(false, filtered)}
+                              className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                            >
+                              Bỏ chọn
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Search input */}
@@ -1976,7 +1995,7 @@ export const AiAgentPage: React.FC<AiAgentPageProps> = ({ accounts }) => {
                         <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
                         <span>Đang tải danh sách nhóm từ Zalo...</span>
                       </div>
-                    ) : accountGroups.length === 0 ? (
+                    ) : accountGroups.length === 0 && modalConfig.allowedGroupIds.length === 0 ? (
                       <div className="py-6 text-center text-xs text-slate-400 space-y-1">
                         <div>Không tìm thấy nhóm chat nào của tài khoản này.</div>
                         <div className="text-[11px] text-slate-400">
@@ -1985,12 +2004,30 @@ export const AiAgentPage: React.FC<AiAgentPageProps> = ({ accounts }) => {
                       </div>
                     ) : (
                       (() => {
-                        const filtered = accountGroups.filter((g) => {
-                          const q = groupSearchQuery.toLowerCase();
-                          const gName = String(g.name || g.groupName || "").toLowerCase();
-                          const gId = String(g.id || g.groupId || "").toLowerCase();
-                          return gName.includes(q) || gId.includes(q);
-                        });
+                        const combinedGroups = [...accountGroups];
+                        const existingSet = new Set(accountGroups.map((g) => String(g.id || g.groupId)));
+                        for (const savedId of modalConfig.allowedGroupIds) {
+                          if (!existingSet.has(savedId)) {
+                            combinedGroups.push({
+                              id: savedId,
+                              groupId: savedId,
+                              name: `Nhóm ${savedId}`,
+                              groupName: `Nhóm ${savedId}`,
+                              avatar: "",
+                              totalMember: 0,
+                              isCustomSaved: true,
+                            });
+                          }
+                        }
+
+                        const q = groupSearchQuery.trim().toLowerCase();
+                        const filtered = q
+                          ? combinedGroups.filter((g) => {
+                              const gName = String(g.name || g.groupName || "").toLowerCase();
+                              const gId = String(g.id || g.groupId || "").toLowerCase();
+                              return gName.includes(q) || gId.includes(q);
+                            })
+                          : combinedGroups;
 
                         if (filtered.length === 0) {
                           return (
@@ -2036,6 +2073,7 @@ export const AiAgentPage: React.FC<AiAgentPageProps> = ({ accounts }) => {
                                   <div className="font-semibold text-xs truncate">{gName}</div>
                                   <div className="text-[10px] text-slate-400 truncate">
                                     ID: {gId} {g.totalMember ? `• ${g.totalMember} thành viên` : ""}
+                                    {g.isCustomSaved ? " • Đã lưu trước đó" : ""}
                                   </div>
                                 </div>
                               </div>

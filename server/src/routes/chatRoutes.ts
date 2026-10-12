@@ -23,7 +23,7 @@ chatRouter.get("/:id/friends", async (req: Request, res: Response) => {
     }
 });
 
-// GET /api/accounts/:id/groups - Get all groups with detailed info
+// GET /api/accounts/:id/groups or /api/chat/:id/groups - Get all groups with detailed info
 chatRouter.get("/:id/groups", async (req: Request, res: Response) => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const session = sessionManager.getSession(id);
@@ -41,36 +41,50 @@ chatRouter.get("/:id/groups", async (req: Request, res: Response) => {
             return res.json({ success: true, data: [] });
         }
 
-        let groupList: any[] = [];
+        let gridInfoMap: Record<string, any> = {};
         try {
             // Lấy chi tiết thông tin các nhóm (tên, avatar, số thành viên)
             const infoRes = await session.api.getGroupInfo(groupIds);
-            const gridInfoMap = (infoRes as any)?.gridInfoMap || {};
-            groupList = groupIds.map((gid) => {
-                const g = gridInfoMap[gid];
-                return {
-                    id: gid,
-                    groupId: gid,
-                    name: g?.name || `Nhóm ${gid}`,
-                    groupName: g?.name || `Nhóm ${gid}`,
-                    avatar: g?.avt || g?.fullAvt || "",
-                    totalMember: g?.totalMember || (Array.isArray(g?.memberIds) ? g.memberIds.length : 0),
-                };
-            });
+            gridInfoMap = (infoRes as any)?.gridInfoMap || (infoRes as any)?.data?.gridInfoMap || {};
         } catch (infoErr) {
-            console.warn(`[Groups] Không thể lấy chi tiết nhóm cho ${id}, fallback dùng ID:`, infoErr);
-            groupList = groupIds.map((gid) => ({
+            console.warn(`[Groups] Lỗi khi lấy chi tiết nhóm cho ${id}, fallback chia nhỏ:`, infoErr);
+            const CHUNK_SIZE = 20;
+            for (let i = 0; i < groupIds.length; i += CHUNK_SIZE) {
+                const chunk = groupIds.slice(i, i + CHUNK_SIZE);
+                try {
+                    const chunkRes = await session.api.getGroupInfo(chunk);
+                    const map = (chunkRes as any)?.gridInfoMap || (chunkRes as any)?.data?.gridInfoMap || {};
+                    Object.assign(gridInfoMap, map);
+                } catch (cErr) {
+                    console.warn(`[Groups] Chunk ${i}-${i + CHUNK_SIZE} thất bại:`, cErr);
+                }
+            }
+        }
+
+        const groupList = groupIds.map((gid) => {
+            const g = gridInfoMap[gid];
+            const name = g?.name || g?.groupName || `Nhóm ${gid}`;
+            return {
                 id: gid,
                 groupId: gid,
-                name: `Nhóm ${gid}`,
-                groupName: `Nhóm ${gid}`,
-                avatar: "",
-                totalMember: 0,
-            }));
-        }
+                name: name,
+                groupName: name,
+                avatar: g?.avt || g?.fullAvt || "",
+                totalMember: g?.totalMember || (Array.isArray(g?.memberIds) ? g.memberIds.length : (Array.isArray(g?.currentMems) ? g.currentMems.length : 0)),
+            };
+        });
+
+        // Sắp xếp: Ưu tiên nhóm có tên thực tế lên trước, sau đó xếp theo thứ tự A-Z tiếng Việt
+        groupList.sort((a, b) => {
+            const aIsRaw = a.name.startsWith("Nhóm ");
+            const bIsRaw = b.name.startsWith("Nhóm ");
+            if (aIsRaw !== bIsRaw) return aIsRaw ? 1 : -1;
+            return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+        });
 
         res.json({ success: true, data: groupList });
     } catch (err: any) {
+        console.error(`[Groups] Lỗi lấy danh sách nhóm cho ${id}:`, err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
