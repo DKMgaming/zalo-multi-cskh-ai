@@ -1,0 +1,5 @@
+pinecone
+https://semirag-gpxczi5.svc.aped-4627-b74a.pinecone.io
+apikey:pcsk_4HbBA_NT38iejn5GS2kyXYemdfbk8oyz5E2J34QzTHaQTJ9JTyMMbdRjbBRi94nZ8xroe
+index: CSKH - dimention 1024
+embeding model: llama-text-embed-v2 
